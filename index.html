@@ -699,6 +699,60 @@
 
     .lightbox-close:hover { opacity: 1; }
 
+    /* ─── In-page Editing ──────────────────────────────────────── */
+    [data-editable][contenteditable="true"] {
+      cursor: text;
+      border-radius: 2px;
+      transition: box-shadow 0.15s;
+    }
+    [data-editable][contenteditable="true"]:hover {
+      box-shadow: 0 0 0 3px rgba(196,168,130,0.35);
+    }
+    [data-editable][contenteditable="true"]:focus {
+      box-shadow: 0 0 0 3px var(--accent-light);
+      outline: none;
+    }
+
+    .edit-mode-bar {
+      display: none;
+      position: fixed;
+      bottom: 1.2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(42,33,24,0.88);
+      color: var(--cream);
+      font-family: 'Lato', sans-serif;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      padding: 0.5rem 1.5rem;
+      z-index: 999;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    body.admin-mode .edit-mode-bar { display: block; }
+
+    /* ─── Admin photo add tile ──────────────────────────────────── */
+    .photo-add-tile {
+      display: none;
+      aspect-ratio: 1 / 1;
+      border: 2px dashed var(--accent-light);
+      background: var(--card-bg);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0.4rem;
+      cursor: pointer;
+      color: var(--accent-light);
+      font-family: 'Lato', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    body.admin-mode .photo-add-tile { display: flex; }
+    .photo-add-tile:hover { border-color: var(--accent); background: #f5ede0; color: var(--accent); }
+    .photo-add-tile svg { width: 1.6rem; height: 1.6rem; }
+
     /* ─── Responsive ────────────────────────────────────────────── */
     @media (max-width: 600px) {
       section { padding: 3.5rem 0; }
@@ -814,19 +868,16 @@
         <h2 class="fade-in">Moments &amp; Memories</h2>
       </div>
 
-      <div class="drop-zone fade-in" id="dropZone">
-        <input type="file" id="fileInput" accept="image/*" multiple style="display:none" />
-        <div class="drop-zone-inner">
-          <div class="drop-zone-icon">&#9706;</div>
-          <span class="drop-zone-prompt">
-            <p class="drop-zone-text">Drag photos here to add them</p>
-            <p class="drop-zone-sub">or click to browse &nbsp;&middot;&nbsp; JPG, PNG, WEBP</p>
-          </span>
-          <span class="drop-zone-add">+ Add more photos</span>
+      <input type="file" id="fileInput" accept="image/*" multiple style="display:none" />
+
+      <div class="photo-grid" id="photoGrid">
+        <div class="photo-add-tile" id="photoAddTile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          <span>Add photo</span>
         </div>
       </div>
-
-      <div class="photo-grid" id="photoGrid"></div>
 
     </div>
   </section>
@@ -1002,7 +1053,7 @@
   <script>
     /* ── Gallery (persisted) ── */
     (function () {
-      var dropZone  = document.getElementById('dropZone');
+      var addTile  = document.getElementById('photoAddTile');
       var fileInput = document.getElementById('fileInput');
       var grid      = document.getElementById('photoGrid');
       var lightbox  = document.getElementById('lightbox');
@@ -1037,14 +1088,12 @@
           if (!document.body.classList.contains('admin-mode')) return;
           item.remove();
           saveGallery();
-          if (grid.children.length === 0) dropZone.classList.remove('has-photos');
         });
 
         item.appendChild(img);
         item.appendChild(btn);
-        grid.appendChild(item);
+        grid.insertBefore(item, addTile);
         requestAnimationFrame(function () { requestAnimationFrame(function () { item.classList.add('visible'); }); });
-        dropZone.classList.add('has-photos');
       }
 
       gallery.forEach(function (src) { createItem(src); });
@@ -1059,18 +1108,86 @@
         });
       }
 
-      dropZone.addEventListener('click', function () { fileInput.click(); });
+      addTile.addEventListener('click', function () { fileInput.click(); });
       fileInput.addEventListener('change', function () { addImages(fileInput.files); fileInput.value = ''; });
-      dropZone.addEventListener('dragover', function (e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
-      dropZone.addEventListener('dragleave', function () { dropZone.classList.remove('drag-over'); });
-      dropZone.addEventListener('drop', function (e) { e.preventDefault(); dropZone.classList.remove('drag-over'); addImages(e.dataTransfer.files); });
 
       document.addEventListener('dragover', function (e) { e.preventDefault(); });
-      document.addEventListener('drop', function (e) { e.preventDefault(); if (e.dataTransfer.files.length) addImages(e.dataTransfer.files); });
+      document.addEventListener('drop', function (e) {
+        e.preventDefault();
+        if (e.dataTransfer.files.length) addImages(e.dataTransfer.files);
+      });
 
       lbClose.addEventListener('click', function () { lightbox.classList.remove('open'); });
       lightbox.addEventListener('click', function (e) { if (e.target === lightbox) lightbox.classList.remove('open'); });
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') lightbox.classList.remove('open'); });
+    })();
+  </script>
+
+  <script>
+    /* ── In-page text editing ── */
+    (function () {
+      var STORAGE_KEY = 'memorial_text';
+      var saved = {};
+      try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) {}
+
+      var editables = [];
+
+      function reg(sel, key) {
+        var el = document.querySelector(sel);
+        if (el) editables.push({ el: el, key: key });
+      }
+      function regAll(sel, prefix) {
+        document.querySelectorAll(sel).forEach(function (el, i) {
+          editables.push({ el: el, key: prefix + i });
+        });
+      }
+
+      reg('.hero h1',                             'hero-name');
+      reg('.hero .hebrew-name',                   'hebrew-name');
+      reg('.hero .dates',                         'dates');
+      reg('.hero-quote',                          'hero-quote');
+      reg('.biography .section-label',            'bio-label');
+      reg('.biography h2',                        'bio-heading');
+      regAll('.biography .container > p',         'bio-p-');
+      reg('.biography .survived-by',              'survived-by');
+      reg('.tributes .section-label',             'tributes-label');
+      reg('.tributes h2',                         'tributes-heading');
+      regAll('.tribute-card blockquote',          'tribute-quote-');
+      regAll('.tribute-card .name',               'tribute-name-');
+      regAll('.tribute-card .role',               'tribute-role-');
+      reg('.memory-section .section-label',       'memory-label');
+      reg('.memory-section h2',                   'memory-heading');
+      reg('.memory-section .intro-text',          'memory-intro');
+      reg('footer .footer-name',                  'footer-name');
+      reg('footer .footer-roles',                 'footer-roles');
+      reg('footer .hebrew',                       'footer-hebrew');
+      reg('footer .transliteration',              'footer-trans');
+
+      /* Restore saved text for all visitors */
+      editables.forEach(function (item) {
+        if (saved[item.key] !== undefined) item.el.innerHTML = saved[item.key];
+        item.el.setAttribute('data-editable', item.key);
+      });
+
+      function enableEditing() {
+        editables.forEach(function (item) {
+          item.el.contentEditable = 'true';
+          item.el.spellcheck = true;
+          item.el.addEventListener('input', function () {
+            saved[item.key] = item.el.innerHTML;
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch(e) {}
+          });
+        });
+      }
+
+      var observer = new MutationObserver(function () {
+        if (document.body.classList.contains('admin-mode')) {
+          enableEditing();
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body, { attributes: true });
+      if (document.body.classList.contains('admin-mode')) enableEditing();
     })();
   </script>
 
@@ -1103,6 +1220,8 @@
       });
     })();
   </script>
+
+  <div class="edit-mode-bar">&#9998;&nbsp; Edit mode — click any text to edit it</div>
 
 </body>
 </html>
