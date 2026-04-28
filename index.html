@@ -724,12 +724,28 @@
       font-family: 'Lato', sans-serif;
       font-size: 0.72rem;
       letter-spacing: 0.1em;
-      padding: 0.5rem 1.5rem;
+      padding: 0.5rem 0.5rem 0.5rem 1.5rem;
       z-index: 999;
-      pointer-events: none;
+      pointer-events: auto;
       white-space: nowrap;
+      align-items: center;
+      gap: 1rem;
     }
-    body.admin-mode .edit-mode-bar { display: block; }
+    body.admin-mode .edit-mode-bar { display: flex; }
+
+    .edit-mode-exit {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: var(--cream);
+      font-family: 'Lato', sans-serif;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.3rem 0.8rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .edit-mode-exit:hover { background: rgba(255,255,255,0.28); }
 
     /* ─── Admin photo add tile ──────────────────────────────────── */
     .photo-add-tile {
@@ -1011,6 +1027,16 @@
         var pw = prompt('Password:');
         if (pw === PASS) { activateAdmin(); }
       });
+
+      /* Exit admin mode */
+      document.getElementById('exitAdmin').addEventListener('click', function () {
+        document.body.classList.remove('admin-mode');
+        try { sessionStorage.removeItem('memorial_admin'); } catch(e) {}
+        document.getElementById('adminUnlock').title = '';
+        document.querySelectorAll('[contenteditable]').forEach(function (el) {
+          el.removeAttribute('contenteditable');
+        });
+      });
     })();
   </script>
 
@@ -1221,7 +1247,10 @@
     })();
   </script>
 
-  <div class="edit-mode-bar">&#9998;&nbsp; Edit mode — click any text to edit it</div>
+  <div class="edit-mode-bar">
+    <span>&#9998;&nbsp; Edit mode — click any text to edit</span>
+    <button class="edit-mode-exit" id="exitAdmin">Exit</button>
+  </div>
 
 </body>
 </html>
