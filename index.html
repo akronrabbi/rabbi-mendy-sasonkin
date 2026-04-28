@@ -1036,6 +1036,30 @@
   </script>
 
   <script>
+    /* Shared image compression — keeps base64 size small for Publish */
+    window.compressPhoto = function (file, callback) {
+      var img = new Image();
+      var url = URL.createObjectURL(file);
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var MAX = 1200;
+        var w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          var scale = MAX / Math.max(w, h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        callback(canvas.toDataURL('image/jpeg', 0.78));
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); };
+      img.src = url;
+    };
+  </script>
+
+  <script>
     /* ── Hero portrait (persisted) ── */
     (function () {
       var portrait      = document.getElementById('heroPortrait');
@@ -1058,9 +1082,7 @@
 
       function readFile(file) {
         if (!file || !file.type.startsWith('image/')) return;
-        var reader = new FileReader();
-        reader.onload = function (e) { savePortrait(e.target.result); };
-        reader.readAsDataURL(file);
+        compressPhoto(file, function (src) { savePortrait(src); });
       }
 
       portrait.addEventListener('click', function () { if (document.body.classList.contains('admin-mode')) portraitInput.click(); });
@@ -1123,9 +1145,7 @@
         if (!document.body.classList.contains('admin-mode')) return;
         Array.from(files).forEach(function (file) {
           if (!file.type.startsWith('image/')) return;
-          var reader = new FileReader();
-          reader.onload = function (e) { createItem(e.target.result); saveGallery(); };
-          reader.readAsDataURL(file);
+          compressPhoto(file, function (src) { createItem(src); saveGallery(); });
         });
       }
 
@@ -1305,24 +1325,31 @@
         })
         .then(function (data) {
           var sha = data.sha;
-          var html = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
 
-          var updated = html.replace(
-            /<script id="memorial-init">[\s\S]*?<\/script>/,
-            '<script id="memorial-init">' + initScript + '<\/script>'
-          );
+          function doReplace(html) {
+            var updated = html.replace(
+              /<script id="memorial-init">[\s\S]*?<\/script>/,
+              '<script id="memorial-init">' + initScript + '<\/script>'
+            );
+            if (updated === html) throw new Error('Could not locate the init block. Re-publish from a fresh session.');
+            return fetch(API, {
+              method: 'PUT',
+              headers: Object.assign({ 'Content-Type': 'application/json' }, HEADERS),
+              body: JSON.stringify({
+                message: 'Publish memorial site content',
+                content: btoa(unescape(encodeURIComponent(updated))),
+                sha: sha
+              })
+            });
+          }
 
-          if (updated === html) throw new Error('Could not locate the init block. Re-publish from a fresh session.');
-
-          return fetch(API, {
-            method: 'PUT',
-            headers: Object.assign({ 'Content-Type': 'application/json' }, HEADERS),
-            body: JSON.stringify({
-              message: 'Publish memorial site content',
-              content: btoa(unescape(encodeURIComponent(updated))),
-              sha: sha
-            })
-          });
+          if (data.content) {
+            /* File is small enough for the Contents API to return inline */
+            return doReplace(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
+          }
+          /* File >1 MB — GitHub omits content; fetch raw text instead */
+          var rawUrl = 'https://raw.githubusercontent.com/akronrabbi/rabbi-mendy-sasonkin/main/index.html?cb=' + Date.now();
+          return fetch(rawUrl).then(function (r) { return r.text(); }).then(doReplace);
         })
         .then(function (r) {
           if (!r.ok) {
