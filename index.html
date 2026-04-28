@@ -116,12 +116,21 @@
       border-radius: 50%;
       margin: 0 auto 2rem;
       position: relative;
-      cursor: pointer;
+      cursor: default;
+      pointer-events: none;
       overflow: hidden;
       border: 3px solid var(--accent-light);
       box-shadow: 0 4px 24px rgba(139,111,71,0.15);
       background-color: var(--cream-dark);
       transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .hero-portrait:not(.filled) { display: none; }
+
+    body.admin-mode .hero-portrait {
+      display: block;
+      cursor: pointer;
+      pointer-events: auto;
     }
 
     .hero-portrait.drag-over {
@@ -502,6 +511,7 @@
     }
 
     .drop-zone {
+      display: none; /* hidden from visitors */
       border: 2px dashed var(--accent-light);
       border-radius: 2px;
       padding: 2.8rem 2rem;
@@ -512,14 +522,15 @@
       background-color: var(--card-bg);
     }
 
+    body.admin-mode .drop-zone { display: block; }
+
     .drop-zone.drag-over {
       background-color: #f5ede0;
       border-color: var(--accent);
     }
 
     .drop-zone.has-photos {
-      padding: 1rem 2rem;
-      border-style: solid;
+      display: none !important; /* hide once photos are added */
     }
 
     .drop-zone-inner {
@@ -615,9 +626,25 @@
       line-height: 1;
     }
 
-    .photo-item:hover .remove-btn {
+    body.admin-mode .photo-item:hover .remove-btn {
       opacity: 1;
     }
+
+    /* Admin unlock trigger — barely visible, appears on hover near section label */
+    .admin-unlock {
+      background: none;
+      border: none;
+      padding: 0;
+      margin-left: 0.5rem;
+      cursor: pointer;
+      font-size: 0.7rem;
+      color: var(--rule);
+      vertical-align: middle;
+      transition: color 0.2s;
+      line-height: 1;
+    }
+    .photos-section .section-header:hover .admin-unlock { color: var(--warm-gray); }
+    body.admin-mode .admin-unlock { color: var(--accent); }
 
     /* Lightbox */
     .lightbox {
@@ -769,7 +796,7 @@
     <div class="wide-container">
 
       <div class="section-header">
-        <p class="section-label fade-in">Photographs</p>
+        <p class="section-label fade-in">Photographs<button class="admin-unlock" id="adminUnlock" title="">&#9679;</button></p>
         <h2 class="fade-in">Moments &amp; Memories</h2>
       </div>
 
@@ -899,44 +926,67 @@
        PHOTO GALLERY
   ═══════════════════════════════════════════════ -->
   <script>
-    /* ── Hero portrait ── */
+    /* ── Admin auth ── */
     (function () {
-      var portrait      = document.getElementById('heroPortrait');
-      var portraitInput = document.getElementById('portraitInput');
-      var portraitImg   = document.getElementById('portraitImg');
+      var PASS = 'rabbimendy';
 
-      function setPortrait(file) {
-        if (!file || !file.type.startsWith('image/')) return;
-        var reader = new FileReader();
-        reader.onload = function (e) {
-          portraitImg.src = e.target.result;
-          portraitImg.style.display = 'block';
-          portrait.classList.add('filled');
-        };
-        reader.readAsDataURL(file);
+      function activateAdmin() {
+        document.body.classList.add('admin-mode');
+        try { sessionStorage.setItem('memorial_admin', '1'); } catch(e) {}
+        document.getElementById('adminUnlock').title = 'Admin mode active';
       }
 
-      portrait.addEventListener('click', function () { portraitInput.click(); });
-      portraitInput.addEventListener('change', function () {
-        setPortrait(portraitInput.files[0]);
-        portraitInput.value = '';
-      });
-      portrait.addEventListener('dragover', function (e) {
-        e.preventDefault(); e.stopPropagation();
-        portrait.classList.add('drag-over');
-      });
-      portrait.addEventListener('dragleave', function () {
-        portrait.classList.remove('drag-over');
-      });
-      portrait.addEventListener('drop', function (e) {
-        e.preventDefault(); e.stopPropagation();
-        portrait.classList.remove('drag-over');
-        setPortrait(e.dataTransfer.files[0]);
+      /* Restore session */
+      if (sessionStorage.getItem('memorial_admin') === '1') activateAdmin();
+
+      /* Unlock button */
+      document.getElementById('adminUnlock').addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (document.body.classList.contains('admin-mode')) return;
+        var pw = prompt('Password:');
+        if (pw === PASS) { activateAdmin(); }
       });
     })();
   </script>
 
   <script>
+    /* ── Hero portrait (persisted) ── */
+    (function () {
+      var portrait      = document.getElementById('heroPortrait');
+      var portraitInput = document.getElementById('portraitInput');
+      var portraitImg   = document.getElementById('portraitImg');
+
+      function applyPortrait(src) {
+        portraitImg.src = src;
+        portraitImg.style.display = 'block';
+        portrait.classList.add('filled');
+      }
+
+      function savePortrait(src) {
+        try { localStorage.setItem('memorial_portrait', src); } catch(e) {}
+        applyPortrait(src);
+      }
+
+      var saved = localStorage.getItem('memorial_portrait');
+      if (saved) applyPortrait(saved);
+
+      function readFile(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        var reader = new FileReader();
+        reader.onload = function (e) { savePortrait(e.target.result); };
+        reader.readAsDataURL(file);
+      }
+
+      portrait.addEventListener('click', function () { if (document.body.classList.contains('admin-mode')) portraitInput.click(); });
+      portraitInput.addEventListener('change', function () { readFile(portraitInput.files[0]); portraitInput.value = ''; });
+      portrait.addEventListener('dragover', function (e) { if (!document.body.classList.contains('admin-mode')) return; e.preventDefault(); e.stopPropagation(); portrait.classList.add('drag-over'); });
+      portrait.addEventListener('dragleave', function () { portrait.classList.remove('drag-over'); });
+      portrait.addEventListener('drop', function (e) { if (!document.body.classList.contains('admin-mode')) return; e.preventDefault(); e.stopPropagation(); portrait.classList.remove('drag-over'); readFile(e.dataTransfer.files[0]); });
+    })();
+  </script>
+
+  <script>
+    /* ── Gallery (persisted) ── */
     (function () {
       var dropZone  = document.getElementById('dropZone');
       var fileInput = document.getElementById('fileInput');
@@ -945,89 +995,68 @@
       var lbImg     = document.getElementById('lightboxImg');
       var lbClose   = document.getElementById('lightboxClose');
 
-      function markHasPhotos() {
+      var gallery = [];
+      try { gallery = JSON.parse(localStorage.getItem('memorial_gallery') || '[]'); } catch(e) {}
+
+      function saveGallery() {
+        var srcs = [];
+        grid.querySelectorAll('img').forEach(function (img) { srcs.push(img.src); });
+        try { localStorage.setItem('memorial_gallery', JSON.stringify(srcs)); } catch(e) {}
+      }
+
+      function createItem(src) {
+        var item = document.createElement('div');
+        item.className = 'photo-item fade-in';
+
+        var img = document.createElement('img');
+        img.src = src;
+        img.alt = 'Memory photo';
+        img.style.cursor = 'zoom-in';
+        img.addEventListener('click', function () { lbImg.src = src; lightbox.classList.add('open'); });
+
+        var btn = document.createElement('button');
+        btn.className = 'remove-btn';
+        btn.title = 'Remove photo';
+        btn.innerHTML = '&times;';
+        btn.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          if (!document.body.classList.contains('admin-mode')) return;
+          item.remove();
+          saveGallery();
+          if (grid.children.length === 0) dropZone.classList.remove('has-photos');
+        });
+
+        item.appendChild(img);
+        item.appendChild(btn);
+        grid.appendChild(item);
+        requestAnimationFrame(function () { requestAnimationFrame(function () { item.classList.add('visible'); }); });
         dropZone.classList.add('has-photos');
       }
 
+      gallery.forEach(function (src) { createItem(src); });
+
       function addImages(files) {
+        if (!document.body.classList.contains('admin-mode')) return;
         Array.from(files).forEach(function (file) {
           if (!file.type.startsWith('image/')) return;
           var reader = new FileReader();
-          reader.onload = function (e) {
-            var src = e.target.result;
-
-            var item = document.createElement('div');
-            item.className = 'photo-item fade-in';
-
-            var img = document.createElement('img');
-            img.src = src;
-            img.alt = 'Memory photo';
-            img.style.cursor = 'zoom-in';
-            img.addEventListener('click', function () {
-              lbImg.src = src;
-              lightbox.classList.add('open');
-            });
-
-            var btn = document.createElement('button');
-            btn.className = 'remove-btn';
-            btn.title = 'Remove photo';
-            btn.innerHTML = '&times;';
-            btn.addEventListener('click', function (ev) {
-              ev.stopPropagation();
-              item.remove();
-              if (grid.children.length === 0) {
-                dropZone.classList.remove('has-photos');
-              }
-            });
-
-            item.appendChild(img);
-            item.appendChild(btn);
-            grid.appendChild(item);
-
-            /* trigger fade-in */
-            requestAnimationFrame(function () {
-              requestAnimationFrame(function () { item.classList.add('visible'); });
-            });
-
-            markHasPhotos();
-          };
+          reader.onload = function (e) { createItem(e.target.result); saveGallery(); };
           reader.readAsDataURL(file);
         });
       }
 
-      /* Click to browse */
       dropZone.addEventListener('click', function () { fileInput.click(); });
       fileInput.addEventListener('change', function () { addImages(fileInput.files); fileInput.value = ''; });
+      dropZone.addEventListener('dragover', function (e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+      dropZone.addEventListener('dragleave', function () { dropZone.classList.remove('drag-over'); });
+      dropZone.addEventListener('drop', function (e) { e.preventDefault(); dropZone.classList.remove('drag-over'); addImages(e.dataTransfer.files); });
 
-      /* Drag and drop */
-      dropZone.addEventListener('dragover', function (e) {
-        e.preventDefault();
-        dropZone.classList.add('drag-over');
-      });
-      dropZone.addEventListener('dragleave', function () {
-        dropZone.classList.remove('drag-over');
-      });
-      dropZone.addEventListener('drop', function (e) {
-        e.preventDefault();
-        dropZone.classList.remove('drag-over');
-        addImages(e.dataTransfer.files);
-      });
-
-      /* Also accept drops anywhere on the page */
       document.addEventListener('dragover', function (e) { e.preventDefault(); });
-      document.addEventListener('drop', function (e) {
-        e.preventDefault();
-        if (e.dataTransfer.files.length) addImages(e.dataTransfer.files);
-      });
+      document.addEventListener('drop', function (e) { e.preventDefault(); if (e.dataTransfer.files.length) addImages(e.dataTransfer.files); });
 
-      /* Lightbox close */
       lbClose.addEventListener('click', function () { lightbox.classList.remove('open'); });
-      lightbox.addEventListener('click', function (e) {
-        if (e.target === lightbox) lightbox.classList.remove('open');
-      });
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') lightbox.classList.remove('open');
-      });
+      lightbox.addEventListener('click', function (e) { if (e.target === lightbox) lightbox.classList.remove('open'); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') lightbox.classList.remove('open'); });
     })();
   </script>
 
