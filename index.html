@@ -102,6 +102,72 @@
       width: 100%;
     }
 
+    /* ─── Hero Banner Photo ─────────────────────────────────────── */
+    .hero-banner {
+      width: 100%;
+      max-height: 480px;
+      overflow: hidden;
+      position: relative;
+      background-color: var(--cream-dark);
+      display: none; /* hidden until image is set or admin is active */
+    }
+
+    .hero-banner.has-image { display: block; }
+    body.admin-mode .hero-banner { display: block; }
+
+    .hero-banner img {
+      width: 100%;
+      height: 100%;
+      max-height: 480px;
+      object-fit: cover;
+      object-position: center top;
+      display: block;
+    }
+
+    .hero-banner .banner-placeholder {
+      height: 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      color: var(--warm-gray);
+      cursor: pointer;
+    }
+
+    .hero-banner.has-image .banner-placeholder { display: none; }
+
+    .hero-banner .banner-placeholder svg {
+      width: 2rem;
+      height: 2rem;
+      opacity: 0.5;
+    }
+
+    .hero-banner .banner-placeholder span {
+      font-family: 'Lato', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .hero-banner .banner-change {
+      display: none;
+      position: absolute;
+      bottom: 0.8rem;
+      right: 1rem;
+      background: rgba(42,33,24,0.55);
+      color: #f8f4ef;
+      font-family: 'Lato', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.35rem 0.75rem;
+      cursor: pointer;
+      border: none;
+    }
+
+    body.admin-mode .hero-banner .banner-change { display: block; }
+
     /* ─── Hero ──────────────────────────────────────────────────── */
     .hero {
       padding: 5.5rem 0 4.5rem;
@@ -271,6 +337,19 @@
       opacity: 0.6;
     }
 
+    .hero-quote::after {
+      content: "\201D";
+      display: block;
+      font-size: 4rem;
+      color: var(--accent-light);
+      line-height: 1;
+      font-family: 'Cormorant Garamond', serif;
+      opacity: 0.6;
+      text-align: right;
+      margin-top: 0.6rem;
+      padding-right: 0.5rem;
+    }
+
     /* ─── Biography ─────────────────────────────────────────────── */
     .biography {
       background-color: var(--cream-dark);
@@ -302,6 +381,7 @@
       max-width: 680px;
       margin-left: auto;
       margin-right: auto;
+      text-align: center;
     }
 
     .biography p + p {
@@ -316,6 +396,7 @@
       font-style: italic;
       font-size: 1.15rem;
       color: var(--text-light);
+      text-align: center;
     }
 
     /* ─── Tributes ──────────────────────────────────────────────── */
@@ -701,6 +782,22 @@
   <div class="top-ribbon"></div>
 
   <!-- ═══════════════════════════════════════════════
+       HERO BANNER PHOTO
+  ═══════════════════════════════════════════════ -->
+  <div class="hero-banner" id="heroBanner">
+    <input type="file" id="bannerInput" accept="image/*" style="display:none" />
+    <img id="bannerImg" src="" alt="" style="display:none" />
+    <div class="banner-placeholder" id="bannerPlaceholder">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+        <path d="M21 15l-5-5L5 21"/>
+      </svg>
+      <span>Click or drag to add a banner photo</span>
+    </div>
+    <button class="banner-change" id="bannerChange">Change photo</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
        HERO
   ═══════════════════════════════════════════════ -->
   <section class="hero">
@@ -946,6 +1043,48 @@
         var pw = prompt('Password:');
         if (pw === PASS) { activateAdmin(); }
       });
+    })();
+  </script>
+
+  <script>
+    /* ── Hero banner (persisted) ── */
+    (function () {
+      var banner      = document.getElementById('heroBanner');
+      var bannerInput = document.getElementById('bannerInput');
+      var bannerImg   = document.getElementById('bannerImg');
+      var placeholder = document.getElementById('bannerPlaceholder');
+      var changeBtn   = document.getElementById('bannerChange');
+
+      function applyBanner(src) {
+        bannerImg.src = src;
+        bannerImg.style.display = 'block';
+        banner.classList.add('has-image');
+      }
+
+      function saveBanner(src) {
+        try { localStorage.setItem('memorial_banner', src); } catch(e) {}
+        applyBanner(src);
+      }
+
+      var saved = localStorage.getItem('memorial_banner');
+      if (saved) applyBanner(saved);
+
+      function readFile(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        var reader = new FileReader();
+        reader.onload = function (e) { saveBanner(e.target.result); };
+        reader.readAsDataURL(file);
+      }
+
+      function isAdmin() { return document.body.classList.contains('admin-mode'); }
+
+      placeholder.addEventListener('click', function () { if (isAdmin()) bannerInput.click(); });
+      changeBtn.addEventListener('click', function () { if (isAdmin()) bannerInput.click(); });
+      bannerInput.addEventListener('change', function () { readFile(bannerInput.files[0]); bannerInput.value = ''; });
+
+      banner.addEventListener('dragover', function (e) { if (!isAdmin()) return; e.preventDefault(); banner.style.outline = '2px dashed var(--accent-light)'; });
+      banner.addEventListener('dragleave', function () { banner.style.outline = ''; });
+      banner.addEventListener('drop', function (e) { if (!isAdmin()) return; e.preventDefault(); banner.style.outline = ''; readFile(e.dataTransfer.files[0]); });
     })();
   </script>
 
