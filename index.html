@@ -1032,103 +1032,6 @@
         if (pw === PASS) { activateAdmin(); }
       });
 
-      /* Exit admin mode */
-      document.getElementById('exitAdmin').addEventListener('click', function () {
-        document.body.classList.remove('admin-mode');
-        try { sessionStorage.removeItem('memorial_admin'); } catch(e) {}
-        document.getElementById('adminUnlock').title = '';
-        document.querySelectorAll('[contenteditable]').forEach(function (el) {
-          el.removeAttribute('contenteditable');
-        });
-      });
-
-      /* ── Publish to GitHub ── */
-      document.getElementById('publishBtn').addEventListener('click', function () {
-        var btn = this;
-
-        /* Collect state */
-        var textData = {};
-        try { textData = JSON.parse(localStorage.getItem('memorial_text') || '{}'); } catch(e) {}
-        var gallery = [];
-        try { gallery = JSON.parse(localStorage.getItem('memorial_gallery') || '[]'); } catch(e) {}
-        var portrait = localStorage.getItem('memorial_portrait') || '';
-
-        /* Build init script that seeds localStorage for all visitors */
-        var version = Date.now().toString();
-        var initScript = '(function(){'
-          + 'var V="' + version + '";'
-          + 'if(localStorage.getItem("mv")===V)return;'
-          + 'localStorage.setItem("mv",V);'
-          + 'localStorage.setItem("memorial_text",' + JSON.stringify(JSON.stringify(textData)) + ');'
-          + 'localStorage.setItem("memorial_gallery",' + JSON.stringify(JSON.stringify(gallery)) + ');'
-          + 'localStorage.setItem("memorial_portrait",' + JSON.stringify(portrait) + ');'
-          + '})();';
-
-        /* Get or ask for GitHub token */
-        var token = localStorage.getItem('memorial_gh_token');
-        if (!token) {
-          token = prompt(
-            'To publish, you need a GitHub Personal Access Token.\n\n' +
-            '1. Go to github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)\n' +
-            '2. Click "Generate new token (classic)"\n' +
-            '3. Give it a name, set expiry, check the "repo" scope\n' +
-            '4. Copy the token and paste it below.\n\n' +
-            'This is stored only on your device and never shared.'
-          );
-          if (!token) return;
-          localStorage.setItem('memorial_gh_token', token);
-        }
-
-        btn.disabled = true;
-        btn.textContent = 'Publishing…';
-
-        var API = 'https://api.github.com/repos/akronrabbi/rabbi-mendy-sasonkin/contents/index.html';
-        var HEADERS = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' };
-
-        /* Step 1: get current file + SHA */
-        fetch(API, { headers: HEADERS })
-          .then(function (r) {
-            if (r.status === 401) throw new Error('Invalid token. Please try again.');
-            return r.json();
-          })
-          .then(function (data) {
-            var sha = data.sha;
-            var html = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
-
-            /* Step 2: replace the memorial-init script */
-            var updated = html.replace(
-              /<script id="memorial-init">[\s\S]*?<\/script>/,
-              '<script id="memorial-init">' + initScript + '<\/script>'
-            );
-
-            if (updated === html) throw new Error('Could not locate the init block. Re-publish from a fresh session.');
-
-            /* Step 3: push back */
-            return fetch(API, {
-              method: 'PUT',
-              headers: Object.assign({ 'Content-Type': 'application/json' }, HEADERS),
-              body: JSON.stringify({
-                message: 'Publish memorial site content',
-                content: btoa(unescape(encodeURIComponent(updated))),
-                sha: sha
-              })
-            });
-          })
-          .then(function (r) {
-            if (!r.ok) {
-              return r.json().then(function (e) { throw new Error(e.message || 'Push failed'); });
-            }
-            btn.textContent = 'Published ✓';
-            setTimeout(function () { btn.textContent = 'Publish'; btn.disabled = false; }, 4000);
-            alert('Published! Your changes will be live at akronrabbi.github.io/rabbi-mendy-sasonkin in about 1 minute.');
-          })
-          .catch(function (e) {
-            alert('Publish failed: ' + e.message);
-            if (e.message.indexOf('Invalid token') !== -1) localStorage.removeItem('memorial_gh_token');
-            btn.textContent = 'Publish';
-            btn.disabled = false;
-          });
-      });
     })();
   </script>
 
@@ -1344,6 +1247,99 @@
     <button class="edit-mode-publish" id="publishBtn">Publish</button>
     <button class="edit-mode-exit" id="exitAdmin">Exit</button>
   </div>
+
+  <script>
+    /* ── Exit + Publish — must be after edit-mode-bar exists in DOM ── */
+    document.getElementById('exitAdmin').addEventListener('click', function () {
+      document.body.classList.remove('admin-mode');
+      try { sessionStorage.removeItem('memorial_admin'); } catch(e) {}
+      document.getElementById('adminUnlock').title = '';
+      document.querySelectorAll('[contenteditable]').forEach(function (el) {
+        el.removeAttribute('contenteditable');
+      });
+    });
+
+    document.getElementById('publishBtn').addEventListener('click', function () {
+      var btn = this;
+
+      var textData = {};
+      try { textData = JSON.parse(localStorage.getItem('memorial_text') || '{}'); } catch(e) {}
+      var gallery = [];
+      try { gallery = JSON.parse(localStorage.getItem('memorial_gallery') || '[]'); } catch(e) {}
+      var portrait = localStorage.getItem('memorial_portrait') || '';
+
+      var version = Date.now().toString();
+      var initScript = '(function(){'
+        + 'var V="' + version + '";'
+        + 'if(localStorage.getItem("mv")===V)return;'
+        + 'localStorage.setItem("mv",V);'
+        + 'localStorage.setItem("memorial_text",' + JSON.stringify(JSON.stringify(textData)) + ');'
+        + 'localStorage.setItem("memorial_gallery",' + JSON.stringify(JSON.stringify(gallery)) + ');'
+        + 'localStorage.setItem("memorial_portrait",' + JSON.stringify(portrait) + ');'
+        + '})();';
+
+      var token = localStorage.getItem('memorial_gh_token');
+      if (!token) {
+        token = prompt(
+          'To publish, you need a GitHub Personal Access Token.\n\n' +
+          '1. Go to github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)\n' +
+          '2. Click “Generate new token (classic)”\n' +
+          '3. Give it a name, set expiry, check the “repo” scope\n' +
+          '4. Copy the token and paste it below.\n\n' +
+          'This is stored only on your device and never shared.'
+        );
+        if (!token) return;
+        localStorage.setItem('memorial_gh_token', token);
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Publishing…';
+
+      var API = 'https://api.github.com/repos/akronrabbi/rabbi-mendy-sasonkin/contents/index.html';
+      var HEADERS = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' };
+
+      fetch(API, { headers: HEADERS })
+        .then(function (r) {
+          if (r.status === 401) throw new Error('Invalid token. Please try again.');
+          return r.json();
+        })
+        .then(function (data) {
+          var sha = data.sha;
+          var html = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+
+          var updated = html.replace(
+            /<script id="memorial-init">[\s\S]*?<\/script>/,
+            '<script id="memorial-init">' + initScript + '<\/script>'
+          );
+
+          if (updated === html) throw new Error('Could not locate the init block. Re-publish from a fresh session.');
+
+          return fetch(API, {
+            method: 'PUT',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, HEADERS),
+            body: JSON.stringify({
+              message: 'Publish memorial site content',
+              content: btoa(unescape(encodeURIComponent(updated))),
+              sha: sha
+            })
+          });
+        })
+        .then(function (r) {
+          if (!r.ok) {
+            return r.json().then(function (e) { throw new Error(e.message || 'Push failed'); });
+          }
+          btn.textContent = 'Published ✓';
+          setTimeout(function () { btn.textContent = 'Publish'; btn.disabled = false; }, 4000);
+          alert('Published! Your changes will be live at akronrabbi.github.io/rabbi-mendy-sasonkin in about 1 minute.');
+        })
+        .catch(function (e) {
+          alert('Publish failed: ' + e.message);
+          if (e.message.indexOf('Invalid token') !== -1) localStorage.removeItem('memorial_gh_token');
+          btn.textContent = 'Publish';
+          btn.disabled = false;
+        });
+    });
+  </script>
 
 </body>
 </html>
